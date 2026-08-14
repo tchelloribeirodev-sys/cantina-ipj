@@ -1,0 +1,22 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Vite debug",
+        "type": "chrome",
+        "request": "launch",
+        "url": "http://localhost:5173",
+        "webRoot": "${workspaceFolder}/front-end/src",
+        "sourceMapPathOverrides": {
+          "webpack:///./*": "${webRoot}/*"
+        }
+      },
+      {
+        "type": "node-terminal",
+        "name": "Run nest script",
+        "request": "launch",
+        "command": "npm run start:debug",
+        "cwd": "${workspaceFolder}/back-end"
+      }
+    ]
+  }

@@ -1,0 +1,60 @@
+import type { Product } from '../types/product';
+
+export const initialProducts: Product[] = [
+  {
+    id: 1,
+    description: 'Arroz Branco 5kg',
+    price: 28.9,
+    imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=160&q=80',
+    year: 2026,
+    emojiIndex: 0,
+  },
+  {
+    id: 2,
+    description: 'Feijão Preto 1kg',
+    price: 8.5,
+    imageUrl: 'https://images.unsplash.com/photo-1551462147-ff29053bfc14?auto=format&fit=crop&w=160&q=80',
+    year: 2026,
+    emojiIndex: 1,
+  },
+  {
+    id: 3,
+    description: 'Óleo de Soja 900ml',
+    price: 6.29,
+    imageUrl: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?auto=format&fit=crop&w=160&q=80',
+    year: 2026,
+    emojiIndex: 2,
+  },
+  {
+    id: 4,
+    description: 'Leite Integral 1L',
+    price: 5.49,
+    imageUrl: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=160&q=80',
+    year: 2026,
+    emojiIndex: 0,
+  },
+  {
+    id: 5,
+    description: 'Açúcar Cristal 1kg',
+    price: 4.75,
+    imageUrl: 'https://images.unsplash.com/photo-1581441363689-1f3c3c414635?auto=format&fit=crop&w=160&q=80',
+    year: 2026,
+    emojiIndex: 3,
+  },
+  {
+    id: 6,
+    description: 'Café Torrado 500g',
+    price: 18.9,
+    imageUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=160&q=80',
+    year: 2026,
+    emojiIndex: 4,
+  },
+  {
+    id: 7,
+    description: 'Arroz Branco 5kg',
+    price: 31.9,
+    imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&w=160&q=80',
+    year: 2025,
+    emojiIndex: 0,
+  },
+];
