@@ -10,7 +10,8 @@ import type { Usuario } from '../types/user';
 // mais usuários ou mais dados sensíveis, o recomendado é migrar para o
 // Supabase Auth (ou ao menos armazenar um hash da senha, nunca o texto puro).
 export async function login(nome: string, senha: string): Promise<Usuario> {
-  const { data, error } = await supabase.rpc('login', { p_nome: nome, p_senha: senha });
+  const nomeParam = nome.trim().toLowerCase();
+  const { data, error } = await supabase.rpc('login', { p_nome: nomeParam, p_senha: senha });
 
   if (error) throw error;
 
