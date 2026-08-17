@@ -32,6 +32,7 @@ import { listFechamentos, saveFechamento } from '../services/settlementsService'
 import type { Conta } from '../types/account';
 import type { Fechamento, FechamentoFormData } from '../types/settlement';
 import type { ConsumoItem } from '../services/purchasesService';
+import { getFriendlyErrorMessage } from '../utils/errorMessage';
 
 const currentYear = new Date().getFullYear();
 
@@ -67,7 +68,7 @@ export function SettlementsPage() {
       setTotalsByConta(totals);
       setFechamentos(fechamentosData);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar os fechamentos.');
+      setLoadError(getFriendlyErrorMessage(err, 'Não foi possível carregar os fechamentos.'));
     } finally {
       setLoading(false);
     }
@@ -119,7 +120,7 @@ export function SettlementsPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setMessage(err instanceof Error ? err.message : 'Não foi possível carregar o consumo da conta.');
+          setMessage(getFriendlyErrorMessage(err, 'Não foi possível carregar o consumo da conta.'));
         }
       })
       .finally(() => {
@@ -143,7 +144,7 @@ export function SettlementsPage() {
       setMessage('Fechamento salvo com sucesso.');
       setSelectedConta(null);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Não foi possível salvar o fechamento.');
+      setMessage(getFriendlyErrorMessage(err, 'Não foi possível salvar o fechamento.'));
     }
   };
 

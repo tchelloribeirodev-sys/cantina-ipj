@@ -25,6 +25,7 @@ import { CheckCircle, RadioButtonUncheckedOutlined } from '@mui/icons-material';
 import { listContas, listDistinctYears } from '../services/accountsService';
 import { getTotalsByConta } from '../services/purchasesService';
 import { listFechamentos } from '../services/settlementsService';
+import { getFriendlyErrorMessage } from '../utils/errorMessage';
 
 const currentYear = new Date().getFullYear();
 
@@ -76,7 +77,7 @@ export function ReportsPage() {
 
       setLinhas(rows);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar o relatório.');
+      setLoadError(getFriendlyErrorMessage(err, 'Não foi possível carregar o relatório.'));
     } finally {
       setLoading(false);
     }

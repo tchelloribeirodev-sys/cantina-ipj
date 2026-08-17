@@ -17,6 +17,7 @@ import { ContasTable } from '../components/AccountsTable';
 import { ContaForm } from '../components/AccountsForm';
 import { createConta, deleteConta, listContas, updateConta } from '../services/accountsService';
 import type { Conta, ContaFormData } from '../types/account';
+import { getFriendlyErrorMessage } from '../utils/errorMessage';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -37,7 +38,7 @@ export function ContasPage() {
       const data = await listContas(CURRENT_YEAR);
       setContas(data);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar as contas.');
+      setLoadError(getFriendlyErrorMessage(err, 'Não foi possível carregar as contas.'));
     } finally {
       setLoading(false);
     }
@@ -84,7 +85,7 @@ export function ContasPage() {
       setContas((current) => current.filter((item) => item.id !== deleteTarget.id));
       setMessage('Conta excluída com sucesso.');
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Não foi possível excluir a conta.');
+      setMessage(getFriendlyErrorMessage(err, 'Não foi possível excluir a conta.'));
     } finally {
       setDeleteTarget(null);
     }
@@ -105,7 +106,7 @@ export function ContasPage() {
       setDialogOpen(false);
       setSelectedConta(undefined);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Não foi possível salvar a conta.');
+      setMessage(getFriendlyErrorMessage(err, 'Não foi possível salvar a conta.'));
     }
   };
 

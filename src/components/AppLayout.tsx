@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { Logo } from './Logo';
+import { OfflineBanner } from './OfflineBanner';
 import { appConfig } from '../config';
 import type { Usuario } from '../types/user';
 
@@ -184,6 +185,7 @@ export function AppLayout({ children, selected, onSelect, usuario, onLogout }: A
           pt: { xs: 9, md: 0 },
         }}
       >
+        <OfflineBanner />
         {children}
       </Box>
     </Box>

@@ -31,6 +31,7 @@ import { ProductDialog } from '../components/ProductDialog';
 import { emojiOptions } from '../data/emojis';
 import { createProduct, deleteProduct, listProducts, updateProduct } from '../services/productsService';
 import type { Product, ProductFormData } from '../types/product';
+import { getFriendlyErrorMessage } from '../utils/errorMessage';
 
 const currentYear = new Date().getFullYear();
 
@@ -54,7 +55,7 @@ export function ProductsPage() {
       const data = await listProducts(currentYear);
       setProducts(data);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar os produtos.');
+      setLoadError(getFriendlyErrorMessage(err, 'Não foi possível carregar os produtos.'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +114,7 @@ export function ProductsPage() {
       }
       setDialogOpen(false);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Não foi possível salvar o produto.');
+      setMessage(getFriendlyErrorMessage(err, 'Não foi possível salvar o produto.'));
     } finally {
       setSaving(false);
     }
@@ -127,7 +128,7 @@ export function ProductsPage() {
       setProducts((current) => current.filter((product) => product.id !== deleteTarget.id));
       setMessage('Produto excluído com sucesso.');
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Não foi possível excluir o produto.');
+      setMessage(getFriendlyErrorMessage(err, 'Não foi possível excluir o produto.'));
     } finally {
       setDeleteTarget(null);
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Alert, Box, Button, Chip, CircularProgress, Grid, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Grid, IconButton, Paper, Stack, Tooltip, Typography } from '@mui/material';
 import {
   AccountBalanceWalletOutlined,
   CheckCircle,
@@ -7,15 +7,18 @@ import {
   PaidOutlined,
   PeopleAltOutlined,
   ReceiptLongOutlined,
+  RefreshOutlined,
   ShoppingCartOutlined,
   TrendingUpOutlined,
 } from '@mui/icons-material';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { listContas } from '../services/accountsService';
 import { listProducts } from '../services/productsService';
 import { countPurchases, getTotalsByConta, listRecentPurchases } from '../services/purchasesService';
 import { listFechamentos } from '../services/settlementsService';
 import type { Conta } from '../types/account';
 import type { Purchase } from '../types/purchase';
+import { getFriendlyErrorMessage } from '../utils/errorMessage';
 
 const currentYear = new Date().getFullYear();
 
@@ -76,12 +79,19 @@ interface DashboardData {
 }
 
 export function DashboardPage() {
+  const isOnline = useOnlineStatus();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isManualRefresh = false) => {
+    if (isManualRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setLoadError('');
     try {
       const [contas, products, purchaseCount, totalsByConta, fechamentos, ultimasCompras] = await Promise.all([
@@ -104,10 +114,12 @@ export function DashboardPage() {
         valorPagoByConta,
         ultimasCompras,
       });
+      setLastUpdated(new Date());
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar o dashboard.');
+      setLoadError(getFriendlyErrorMessage(err, 'Não foi possível carregar o dashboard.'));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -119,7 +131,7 @@ export function DashboardPage() {
     return (
       <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 }, maxWidth: 1500, mx: 'auto' }}>
         {loadError ? (
-          <Alert severity="error" action={<Button onClick={fetchData}>Tentar novamente</Button>}>
+          <Alert severity="error" action={<Button onClick={() => fetchData()}>Tentar novamente</Button>}>
             {loadError}
           </Alert>
         ) : (
@@ -153,18 +165,47 @@ export function DashboardPage() {
 
   return (
     <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 }, maxWidth: 1500, mx: 'auto' }}>
-      <Box mb={3}>
-        <Typography variant="body2" color="text.secondary">
-          Início / Dashboard
-        </Typography>
-        <Typography variant="h4" sx={{ mt: 0.5 }}>
-          Dashboard
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Visão geral de {currentYear}. Estes são exemplos de indicadores — outros podem ser adicionados
-          conforme a necessidade.
-        </Typography>
-      </Box>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', sm: 'flex-end' }}
+        gap={1.5}
+        mb={3}
+      >
+        <Box>
+          <Typography variant="body2" color="text.secondary">
+            Início / Dashboard
+          </Typography>
+          <Typography variant="h4" sx={{ mt: 0.5 }}>
+            Dashboard
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Visão geral de {currentYear}. Estes são exemplos de indicadores — outros podem ser adicionados
+            conforme a necessidade.
+          </Typography>
+        </Box>
+
+        <Stack direction="row" alignItems="center" spacing={1}>
+          {lastUpdated && (
+            <Typography variant="caption" color="text.secondary">
+              Atualizado às{' '}
+              {lastUpdated.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            </Typography>
+          )}
+          <Tooltip title={isOnline ? 'Atualizar' : 'Sem conexão'}>
+            <span>
+              <IconButton
+                onClick={() => fetchData(true)}
+                disabled={refreshing || !isOnline}
+                size="small"
+                sx={{ border: '1px solid #E1E5EC' }}
+              >
+                {refreshing ? <CircularProgress size={16} /> : <RefreshOutlined fontSize="small" />}
+              </IconButton>
+            </span>
+          </Tooltip>
+        </Stack>
+      </Stack>
 
       <Grid container spacing={2} mb={3}>
         <Grid size={{ xs: 12, sm: 6, lg: 4 }}>

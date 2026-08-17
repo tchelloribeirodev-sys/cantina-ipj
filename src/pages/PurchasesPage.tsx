@@ -14,14 +14,17 @@ import {
   Snackbar,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import { AddShoppingCartOutlined, CheckCircleOutline } from '@mui/icons-material';
+import { AddShoppingCartOutlined, CheckCircleOutline, WifiOffOutlined } from '@mui/icons-material';
 import { PurchaseCartTable } from '../components/PurchaseCartTable';
 import { PurchaseHistoryTable } from '../components/PurchaseHistoryTable';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { listContas } from '../services/accountsService';
 import { listProducts } from '../services/productsService';
 import { createPurchase, listPurchases } from '../services/purchasesService';
+import { getFriendlyErrorMessage } from '../utils/errorMessage';
 import type { Conta } from '../types/account';
 import type { Product } from '../types/product';
 import type { PurchaseDraftItem, Purchase } from '../types/purchase';
@@ -31,11 +34,46 @@ const currentYear = new Date().getFullYear();
 const money = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+// A compra em andamento (conta + itens) é salva no navegador enquanto o
+// usuário monta o carrinho. Isso evita perder tudo se a página recarregar,
+// a conexão cair no meio do processo, ou o usuário trocar de tela sem
+// querer — bem comum em local com internet instável.
+const DRAFT_STORAGE_KEY = 'cantina.purchaseDraft';
+
+interface PurchaseDraft {
+  contaId: number;
+  items: { productId: number; quantity: number }[];
+}
+
+function readDraft(): PurchaseDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as PurchaseDraft) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(draft: PurchaseDraft | null) {
+  try {
+    if (!draft || (!draft.contaId && draft.items.length === 0)) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // localStorage indisponível (modo privado, por exemplo) — segue sem persistir.
+  }
+}
+
 export function PurchasesPage() {
+  const isOnline = useOnlineStatus();
+
   const [contas, setContas] = useState<Conta[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingBase, setLoadingBase] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [draftRestored, setDraftRestored] = useState(false);
 
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -59,7 +97,7 @@ export function PurchasesPage() {
       setContas(contasData);
       setProducts(productsData);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Não foi possível carregar contas e produtos.');
+      setLoadError(getFriendlyErrorMessage(err, 'Não foi possível carregar contas e produtos.'));
     } finally {
       setLoadingBase(false);
     }
@@ -68,6 +106,42 @@ export function PurchasesPage() {
   useEffect(() => {
     fetchBaseData();
   }, []);
+
+  // Assim que contas e produtos carregam, tenta restaurar uma compra que
+  // ficou em andamento (salva no navegador) da última vez.
+  useEffect(() => {
+    if (loadingBase || draftRestored) return;
+    setDraftRestored(true);
+
+    const draft = readDraft();
+    if (!draft) return;
+
+    const conta = contas.find((item) => item.id === draft.contaId);
+    if (conta) setContaId(conta.id);
+
+    const restoredItems = draft.items
+      .map((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        return product ? { product, quantity: item.quantity } : null;
+      })
+      .filter((item): item is PurchaseDraftItem => item !== null);
+
+    if (restoredItems.length > 0) {
+      setCart(restoredItems);
+      setSuccessMessage('Uma compra em andamento foi restaurada.');
+    }
+  }, [loadingBase, draftRestored, contas, products]);
+
+  // Salva o rascunho a cada mudança de conta/itens (depois que a restauração
+  // inicial já rodou, pra não sobrescrever o rascunho salvo com um estado
+  // vazio antes de ele ser lido).
+  useEffect(() => {
+    if (!draftRestored) return;
+    writeDraft({
+      contaId: typeof contaId === 'number' ? contaId : 0,
+      items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
+    });
+  }, [draftRestored, contaId, cart]);
 
   const selectedConta = contas.find((conta) => conta.id === contaId) ?? null;
 
@@ -86,7 +160,7 @@ export function PurchasesPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Não foi possível carregar o histórico da conta.');
+          setError(getFriendlyErrorMessage(err, 'Não foi possível carregar o histórico da conta.'));
         }
       })
       .finally(() => {
@@ -151,6 +225,11 @@ export function PurchasesPage() {
   const finalizePurchase = async () => {
     setError('');
 
+    if (!isOnline) {
+      setError('Sem conexão com a internet. A compra fica salva neste dispositivo até você conseguir finalizar.');
+      return;
+    }
+
     if (!selectedConta) {
       setError('Selecione a conta para finalizar a compra.');
       return;
@@ -166,9 +245,10 @@ export function PurchasesPage() {
       const newPurchase = await createPurchase(selectedConta.id, cart);
       setPurchases((current) => [newPurchase, ...current]);
       setCart([]);
+      writeDraft(null);
       setSuccessMessage('Compra registrada com sucesso.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível registrar a compra.');
+      setError(getFriendlyErrorMessage(err, 'Não foi possível registrar a compra. O carrinho continua salvo — tente novamente.'));
     } finally {
       setFinalizing(false);
     }
@@ -292,17 +372,21 @@ export function PurchasesPage() {
                   </Typography>
                 </Typography>
 
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  startIcon={<CheckCircleOutline />}
-                  onClick={finalizePurchase}
-                  disabled={finalizing}
-                  sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
-                >
-                  {finalizing ? 'Registrando...' : 'Finalizar compra'}
-                </Button>
+                <Tooltip title={isOnline ? '' : 'Sem conexão — o carrinho fica salvo até a internet voltar'}>
+                  <span style={{ alignSelf: 'stretch' }}>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="large"
+                      startIcon={isOnline ? <CheckCircleOutline /> : <WifiOffOutlined />}
+                      onClick={finalizePurchase}
+                      disabled={finalizing || !isOnline}
+                      sx={{ width: '100%' }}
+                    >
+                      {finalizing ? 'Registrando...' : isOnline ? 'Finalizar compra' : 'Sem conexão'}
+                    </Button>
+                  </span>
+                </Tooltip>
               </Stack>
             </Stack>
           </Paper>
