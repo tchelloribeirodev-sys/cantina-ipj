@@ -1,6 +1,7 @@
 import type { Product } from './product';
 
 export interface PurchaseItem {
+  id: number;
   productId: number;
   description: string;
   imageUrl: string | null;

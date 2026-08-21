@@ -20,10 +20,11 @@ import {
 import { AddShoppingCartOutlined, CheckCircleOutline, WifiOffOutlined } from '@mui/icons-material';
 import { PurchaseCartTable } from '../components/PurchaseCartTable';
 import { PurchaseHistoryTable } from '../components/PurchaseHistoryTable';
+import { QuantityStepper } from '../components/QuantityStepper';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { listContas } from '../services/accountsService';
 import { listProducts } from '../services/productsService';
-import { createPurchase, listPurchases } from '../services/purchasesService';
+import { createPurchase, listPurchases, removePurchaseItem, cancelPurchase, updatePurchaseItemQuantity } from '../services/purchasesService';
 import { getFriendlyErrorMessage } from '../utils/errorMessage';
 import type { Conta } from '../types/account';
 import type { Product } from '../types/product';
@@ -85,6 +86,7 @@ export function PurchasesPage() {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [finalizing, setFinalizing] = useState(false);
+  const [historyBusy, setHistoryBusy] = useState(false);
 
   const fetchBaseData = async () => {
     setLoadingBase(true);
@@ -254,6 +256,83 @@ export function PurchasesPage() {
     }
   };
 
+  const handleChangeItemQuantity = async (purchaseId: number, itemId: number, quantity: number) => {
+    if (!isOnline) {
+      setError('Sem conexão com a internet. Tente novamente quando a conexão voltar.');
+      return;
+    }
+
+    setHistoryBusy(true);
+    setError('');
+    try {
+      const newTotal = await updatePurchaseItemQuantity(itemId, purchaseId, quantity);
+      setPurchases((current) =>
+        current.map((purchase) =>
+          purchase.id === purchaseId
+            ? {
+                ...purchase,
+                total: newTotal,
+                items: purchase.items.map((item) => (item.id === itemId ? { ...item, quantity } : item)),
+              }
+            : purchase,
+        ),
+      );
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Não foi possível atualizar a quantidade.'));
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  const handleRemoveItem = async (purchaseId: number, itemId: number) => {
+    if (!isOnline) {
+      setError('Sem conexão com a internet. Tente novamente quando a conexão voltar.');
+      return;
+    }
+
+    setHistoryBusy(true);
+    setError('');
+    try {
+      const { deletedPurchase, newTotal } = await removePurchaseItem(itemId, purchaseId);
+      setPurchases((current) => {
+        if (deletedPurchase) {
+          return current.filter((purchase) => purchase.id !== purchaseId);
+        }
+        return current.map((purchase) =>
+          purchase.id === purchaseId
+            ? { ...purchase, total: newTotal, items: purchase.items.filter((item) => item.id !== itemId) }
+            : purchase,
+        );
+      });
+      setSuccessMessage(
+        deletedPurchase ? 'Item removido — a compra ficou vazia e foi cancelada.' : 'Item removido da compra.',
+      );
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Não foi possível remover o item.'));
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
+  const handleCancelPurchase = async (purchaseId: number) => {
+    if (!isOnline) {
+      setError('Sem conexão com a internet. Tente novamente quando a conexão voltar.');
+      return;
+    }
+
+    setHistoryBusy(true);
+    setError('');
+    try {
+      await cancelPurchase(purchaseId);
+      setPurchases((current) => current.filter((purchase) => purchase.id !== purchaseId));
+      setSuccessMessage('Compra cancelada.');
+    } catch (err) {
+      setError(getFriendlyErrorMessage(err, 'Não foi possível cancelar a compra.'));
+    } finally {
+      setHistoryBusy(false);
+    }
+  };
+
   return (
     <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 }, maxWidth: 1500, mx: 'auto' }}>
       <Box mb={3}>
@@ -323,15 +402,12 @@ export function PurchasesPage() {
                     </Select>
                   </FormControl>
 
-                  <TextField
-                    label="Quantidade"
-                    type="number"
-                    size="small"
-                    value={quantity}
-                    onChange={(event) => setQuantity(Number(event.target.value))}
-                    inputProps={{ min: 1 }}
-                    sx={{ width: { xs: '100%', sm: 140 } }}
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ display: { sm: 'none' } }}>
+                      Quantidade
+                    </Typography>
+                    <QuantityStepper value={quantity} onChange={setQuantity} />
+                  </Box>
 
                   <Button
                     variant="contained"
@@ -406,7 +482,13 @@ export function PurchasesPage() {
                 <CircularProgress size={24} />
               </Box>
             ) : (
-              <PurchaseHistoryTable purchases={purchases} />
+              <PurchaseHistoryTable
+                purchases={purchases}
+                onChangeItemQuantity={handleChangeItemQuantity}
+                onRemoveItem={handleRemoveItem}
+                onCancelPurchase={handleCancelPurchase}
+                busy={historyBusy}
+              />
             )
           ) : (
             <Paper

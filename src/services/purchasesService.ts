@@ -8,6 +8,7 @@ interface CompraRow {
   created_at: string;
   contas: { nome: string } | { nome: string }[] | null;
   itens_compra: {
+    id: number;
     produto_id: number;
     descricao: string;
     imagem_url: string | null;
@@ -18,7 +19,7 @@ interface CompraRow {
 }
 
 const SELECT_COLUMNS =
-  'id, conta_id, total, created_at, contas(nome), itens_compra(produto_id, descricao, imagem_url, preco_unitario, quantidade, emoji_indice)';
+  'id, conta_id, total, created_at, contas(nome), itens_compra(id, produto_id, descricao, imagem_url, preco_unitario, quantidade, emoji_indice)';
 
 const contaNomeFromRow = (contas: CompraRow['contas']): string => {
   if (!contas) return '';
@@ -32,6 +33,7 @@ const fromRow = (row: CompraRow): Purchase => ({
   total: Number(row.total),
   createdAt: row.created_at,
   items: (row.itens_compra ?? []).map((item) => ({
+    id: item.id,
     productId: item.produto_id,
     description: item.descricao,
     imageUrl: item.imagem_url,
@@ -135,6 +137,74 @@ export async function getConsumoByConta(contaId: number): Promise<ConsumoItem[]>
   return Array.from(agrupado.values()).sort((a, b) => b.subtotal - a.subtotal);
 }
 
+// ============================================================
+// Estorno / correção de compras já registradas
+// ============================================================
+
+async function recalculateCompraTotal(compraId: number): Promise<number> {
+  const { data, error } = await supabase
+    .from('itens_compra')
+    .select('preco_unitario, quantidade')
+    .eq('compra_id', compraId);
+
+  if (error) throw error;
+
+  const total = (data ?? []).reduce(
+    (sum, item: { preco_unitario: number; quantidade: number }) => sum + Number(item.preco_unitario) * item.quantidade,
+    0,
+  );
+
+  const { error: updateError } = await supabase.from('compras').update({ total }).eq('id', compraId);
+  if (updateError) throw updateError;
+
+  return total;
+}
+
+// Corrige a quantidade de um item já registrado (ex.: foi lançado 2 quando
+// era pra ser 1) e recalcula o total da compra.
+export async function updatePurchaseItemQuantity(
+  itemId: number,
+  compraId: number,
+  quantity: number,
+): Promise<number> {
+  const { error } = await supabase.from('itens_compra').update({ quantidade: quantity }).eq('id', itemId);
+  if (error) throw error;
+
+  return recalculateCompraTotal(compraId);
+}
+
+// Remove um item da compra (ex.: foi lançado o produto errado). Se for o
+// último item da compra, a compra inteira é removida junto — não faz
+// sentido manter um registro de compra sem nenhum item.
+export async function removePurchaseItem(
+  itemId: number,
+  compraId: number,
+): Promise<{ deletedPurchase: boolean; newTotal: number }> {
+  const { error } = await supabase.from('itens_compra').delete().eq('id', itemId);
+  if (error) throw error;
+
+  const { data: remaining, error: selectError } = await supabase
+    .from('itens_compra')
+    .select('id')
+    .eq('compra_id', compraId);
+  if (selectError) throw selectError;
+
+  if (!remaining || remaining.length === 0) {
+    const { error: deleteError } = await supabase.from('compras').delete().eq('id', compraId);
+    if (deleteError) throw deleteError;
+    return { deletedPurchase: true, newTotal: 0 };
+  }
+
+  const newTotal = await recalculateCompraTotal(compraId);
+  return { deletedPurchase: false, newTotal };
+}
+
+// Cancela a compra inteira (o "on delete cascade" em itens_compra já remove
+// os itens junto).
+export async function cancelPurchase(compraId: number): Promise<void> {
+  const { error } = await supabase.from('compras').delete().eq('id', compraId);
+  if (error) throw error;
+}
 // ATENÇÃO: a inserção em "compras" e depois em "itens_compra" acontece em duas
 // chamadas separadas (o supabase-js não expõe transações no cliente). Para um
 // uso mais crítico, o ideal é mover essa lógica para uma função (RPC) no
@@ -160,8 +230,13 @@ export async function createPurchase(contaId: number, items: PurchaseDraftItem[]
     emoji_indice: item.product.emojiIndex,
   }));
 
-  const { error: itensError } = await supabase.from('itens_compra').insert(itensPayload);
+  const { data: insertedItens, error: itensError } = await supabase
+    .from('itens_compra')
+    .insert(itensPayload)
+    .select('id, produto_id');
   if (itensError) throw itensError;
+
+  const idByProdutoId = new Map((insertedItens ?? []).map((row) => [row.produto_id, row.id]));
 
   return {
     id: compra.id,
@@ -170,6 +245,7 @@ export async function createPurchase(contaId: number, items: PurchaseDraftItem[]
     total: Number(compra.total),
     createdAt: compra.created_at,
     items: items.map((item) => ({
+      id: idByProdutoId.get(item.product.id) ?? 0,
       productId: item.product.id,
       description: item.product.description,
       imageUrl: item.product.imageUrl,

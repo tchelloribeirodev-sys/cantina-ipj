@@ -14,12 +14,11 @@ import {
   Typography,
 } from '@mui/material';
 import { WhatsApp } from '@mui/icons-material';
-import { appConfig } from '../config';
-import { emojiOptions } from '../data/emojis';
 import type { Conta } from '../types/account';
 import type { FechamentoFormData } from '../types/settlement';
 import type { ConsumoItem } from '../services/purchasesService';
 import { formatCurrencyValue, maskCurrencyInput, parseCurrencyInput } from '../utils/currencyInput';
+import { buildCobrancaMessage, buildWhatsappLink } from '../utils/whatsappMessage';
 
 interface SettlementDialogProps {
   open: boolean;
@@ -35,17 +34,6 @@ interface SettlementDialogProps {
 
 const money = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
-// Mesmo valor, sem o prefixo "R$" — usado nas linhas de item da
-// mensagem de WhatsApp (ex.: "R$: 36,00").
-const moneyPlain = (value: number) =>
-  value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const buildWhatsappLink = (telefone: string, message: string) => {
-  const numbers = telefone.replace(/\D/g, '');
-  const withCountryCode = numbers.length >= 10 ? `55${numbers}` : numbers;
-  return `https://api.whatsapp.com/send/?phone=${withCountryCode}&text=${encodeURIComponent(message)}`;
-};
 
 export function SettlementDialog({
   open,
@@ -88,25 +76,9 @@ export function SettlementDialog({
   };
 
   const handleWhatsapp = () => {
-    const linhasItens = consumo.map((item) => {
-      const emoji =
-        item.emojiIndex !== null && emojiOptions[item.emojiIndex] ? emojiOptions[item.emojiIndex].emoji : '🛒';
-      return `${emoji}  ${item.descricao} - Qtd : ${item.quantidade} - R$: ${moneyPlain(item.subtotal)}`;
-    });
-
-    const message = [
-      `Olá ${conta.nome}, tudo bem? 🙂`,
-      'Segue seu consumo na cantina:',
-      ...linhasItens,
-      `Segue o valor da cantina: 💵 R$ ${moneyPlain(Math.max(saldo, 0))}`,
-      `Para pagamento, utilize o pix: ${appConfig.pixKey}`,
-      observacao.trim() ? `Obs.: ${observacao.trim()}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
+    const message = buildCobrancaMessage(conta.nome, consumo, saldo, observacao);
     window.open(buildWhatsappLink(conta.telefone, message), '_blank', 'noopener,noreferrer');
-  }; 
+  };
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
@@ -188,15 +160,7 @@ export function SettlementDialog({
               >
                 {consumo.length === 0
                   ? 'Nenhum consumo encontrado para esta conta.'
-                  : consumo
-                      .map((item) => {
-                        const emoji =
-                          item.emojiIndex !== null && emojiOptions[item.emojiIndex]
-                            ? emojiOptions[item.emojiIndex].emoji
-                            : '🛒';
-                        return `${emoji}  ${item.descricao} - Qtd : ${item.quantidade} - R$: ${moneyPlain(item.subtotal)}`;
-                      })
-                      .join('\n')}
+                  : buildCobrancaMessage(conta.nome, consumo, saldo, observacao)}
               </Box>
             )}
           </Box>

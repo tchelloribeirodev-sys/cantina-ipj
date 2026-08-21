@@ -8,11 +8,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import { DeleteOutline } from '@mui/icons-material';
+import { QuantityStepper } from './QuantityStepper';
 import type { PurchaseDraftItem } from '../types/purchase';
 
 interface PurchaseCartTableProps {
@@ -96,16 +96,9 @@ export function PurchaseCartTable({ items, onChangeQuantity, onRemove }: Purchas
               <TableCell>{money(product.price)}</TableCell>
 
               <TableCell>
-                <TextField
-                  type="number"
-                  size="small"
+                <QuantityStepper
                   value={quantity}
-                  onChange={(event) => {
-                    const next = Number(event.target.value);
-                    onChangeQuantity(product.id, Number.isFinite(next) ? next : 1);
-                  }}
-                  inputProps={{ min: 1, style: { textAlign: 'center' } }}
-                  sx={{ width: 90 }}
+                  onChange={(next) => onChangeQuantity(product.id, next)}
                 />
               </TableCell>
 

@@ -24,7 +24,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { CheckCircle, EditOutlined, RadioButtonUncheckedOutlined, SearchOutlined } from '@mui/icons-material';
+import { CheckCircle, EditOutlined, RadioButtonUncheckedOutlined, SearchOutlined, WhatsApp } from '@mui/icons-material';
+import { BatchChargeDialog } from '../components/BatchChargeDialog';
 import { SettlementDialog } from '../components/SettlementDialog';
 import { listContas } from '../services/accountsService';
 import { getConsumoByConta, getTotalsByConta } from '../services/purchasesService';
@@ -54,6 +55,7 @@ export function SettlementsPage() {
   const [consumo, setConsumo] = useState<ConsumoItem[]>([]);
   const [consumoLoading, setConsumoLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -105,6 +107,11 @@ export function SettlementsPage() {
 
   const selectedRow = rows.find((row) => row.conta.id === selectedConta?.id);
 
+  const pendentes = rows
+    .filter((row) => row.saldo > 0)
+    .sort((a, b) => b.saldo - a.saldo)
+    .map((row) => ({ conta: row.conta, saldo: row.saldo }));
+
   useEffect(() => {
     if (!selectedConta) {
       setConsumo([]);
@@ -150,17 +157,36 @@ export function SettlementsPage() {
 
   return (
     <Box sx={{ px: { xs: 2, md: 4 }, py: { xs: 2, md: 4 }, maxWidth: 1500, mx: 'auto' }}>
-      <Box mb={3}>
-        <Typography variant="body2" color="text.secondary">
-          Movimentações / Fechamentos
-        </Typography>
-        <Typography variant="h4" sx={{ mt: 0.5 }}>
-          Fechamentos
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Acompanhe o total de cada conta, o valor pago e quem já quitou.
-        </Typography>
-      </Box>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        justifyContent="space-between"
+        alignItems={{ xs: 'stretch', sm: 'flex-end' }}
+        gap={2}
+        mb={3}
+      >
+        <Box>
+          <Typography variant="body2" color="text.secondary">
+            Movimentações / Fechamentos
+          </Typography>
+          <Typography variant="h4" sx={{ mt: 0.5 }}>
+            Fechamentos
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Acompanhe o total de cada conta, o valor pago e quem já quitou.
+          </Typography>
+        </Box>
+
+        <Button
+          variant="outlined"
+          color="success"
+          startIcon={<WhatsApp />}
+          onClick={() => setBatchDialogOpen(true)}
+          disabled={pendentes.length === 0}
+          sx={{ alignSelf: { xs: 'stretch', sm: 'auto' } }}
+        >
+          Cobrança em lote {pendentes.length > 0 ? `(${pendentes.length})` : ''}
+        </Button>
+      </Stack>
 
       <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, mb: 2, borderColor: '#E6E9EF' }}>
         <Stack direction={{ xs: 'column', md: 'row' }} gap={2}>
@@ -306,6 +332,12 @@ export function SettlementsPage() {
       />
 
       <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage('')} message={message} />
+
+      <BatchChargeDialog
+        open={batchDialogOpen}
+        pendentes={pendentes}
+        onClose={() => setBatchDialogOpen(false)}
+      />
     </Box>
   );
 }

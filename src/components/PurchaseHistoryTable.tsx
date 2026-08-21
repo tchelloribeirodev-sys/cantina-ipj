@@ -1,23 +1,33 @@
 import { useState } from 'react';
 import {
+  Alert,
   Box,
+  Button,
   Chip,
   Collapse,
   IconButton,
   Paper,
+  Snackbar,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import { KeyboardArrowDown, KeyboardArrowUp } from '@mui/icons-material';
+import { DeleteOutline, KeyboardArrowDown, KeyboardArrowUp, RemoveShoppingCartOutlined } from '@mui/icons-material';
+import { QuantityStepper } from './QuantityStepper';
 import type { Purchase } from '../types/purchase';
 
 interface PurchaseHistoryTableProps {
   purchases: Purchase[];
+  onChangeItemQuantity?: (purchaseId: number, itemId: number, quantity: number) => void;
+  onRemoveItem?: (purchaseId: number, itemId: number) => void;
+  onCancelPurchase?: (purchaseId: number) => void;
+  busy?: boolean;
 }
 
 const money = (value: number) =>
@@ -32,8 +42,24 @@ const formatDate = (iso: string) =>
     minute: '2-digit',
   });
 
-function PurchaseRow({ purchase }: { purchase: Purchase }) {
+function PurchaseRow({
+  purchase,
+  onChangeItemQuantity,
+  onRemoveItem,
+  onCancelPurchase,
+  busy,
+}: {
+  purchase: Purchase;
+  onChangeItemQuantity?: (purchaseId: number, itemId: number, quantity: number) => void;
+  onRemoveItem?: (purchaseId: number, itemId: number) => void;
+  onCancelPurchase?: (purchaseId: number) => void;
+  busy?: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const [itemToRemove, setItemToRemove] = useState<number | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+
+  const editable = Boolean(onChangeItemQuantity || onRemoveItem || onCancelPurchase);
 
   return (
     <>
@@ -58,10 +84,21 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
             {money(purchase.total)}
           </Typography>
         </TableCell>
+        {editable && (
+          <TableCell align="right">
+            {onCancelPurchase && (
+              <Tooltip title="Cancelar compra inteira">
+                <IconButton size="small" color="error" onClick={() => setConfirmingCancel(true)} disabled={busy}>
+                  <RemoveShoppingCartOutlined fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </TableCell>
+        )}
       </TableRow>
 
       <TableRow>
-        <TableCell colSpan={6} sx={{ p: 0, borderBottom: open ? undefined : 'none' }}>
+        <TableCell colSpan={editable ? 7 : 6} sx={{ p: 0, borderBottom: open ? undefined : 'none' }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ px: 3, py: 2, bgcolor: '#FAFBFC' }}>
               <Table size="small">
@@ -69,17 +106,44 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
                   <TableRow>
                     <TableCell>Produto</TableCell>
                     <TableCell width={130}>Preço unit.</TableCell>
-                    <TableCell width={110}>Quantidade</TableCell>
+                    <TableCell width={editable ? 150 : 110}>Quantidade</TableCell>
                     <TableCell width={130}>Subtotal</TableCell>
+                    {editable && <TableCell width={60} align="right" />}
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {purchase.items.map((item) => (
-                    <TableRow key={item.productId}>
+                    <TableRow key={item.id}>
                       <TableCell>{item.description}</TableCell>
                       <TableCell>{money(item.unitPrice)}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>
+                        {onChangeItemQuantity ? (
+                          <QuantityStepper
+                            value={item.quantity}
+                            disabled={busy}
+                            onChange={(next) => onChangeItemQuantity(purchase.id, item.id, next)}
+                          />
+                        ) : (
+                          item.quantity
+                        )}
+                      </TableCell>
                       <TableCell>{money(item.unitPrice * item.quantity)}</TableCell>
+                      {editable && (
+                        <TableCell align="right">
+                          {onRemoveItem && (
+                            <Tooltip title="Remover item (produto errado, por exemplo)">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={busy}
+                                onClick={() => setItemToRemove(item.id)}
+                              >
+                                <DeleteOutline fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -88,11 +152,75 @@ function PurchaseRow({ purchase }: { purchase: Purchase }) {
           </Collapse>
         </TableCell>
       </TableRow>
+
+      {onRemoveItem && (
+        <Snackbar open={itemToRemove !== null} autoHideDuration={null} onClose={() => setItemToRemove(null)}>
+          <Alert
+            severity="warning"
+            variant="filled"
+            action={
+              <Stack direction="row">
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    if (itemToRemove !== null) onRemoveItem(purchase.id, itemToRemove);
+                    setItemToRemove(null);
+                  }}
+                >
+                  Remover
+                </Button>
+                <Button color="inherit" size="small" onClick={() => setItemToRemove(null)}>
+                  Cancelar
+                </Button>
+              </Stack>
+            }
+          >
+            Remover este item da compra?
+          </Alert>
+        </Snackbar>
+      )}
+
+      {onCancelPurchase && (
+        <Snackbar open={confirmingCancel} autoHideDuration={null} onClose={() => setConfirmingCancel(false)}>
+          <Alert
+            severity="error"
+            variant="filled"
+            action={
+              <Stack direction="row">
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() => {
+                    onCancelPurchase(purchase.id);
+                    setConfirmingCancel(false);
+                  }}
+                >
+                  Cancelar compra
+                </Button>
+                <Button color="inherit" size="small" onClick={() => setConfirmingCancel(false)}>
+                  Voltar
+                </Button>
+              </Stack>
+            }
+          >
+            Cancelar esta compra inteira (#{String(purchase.id).padStart(4, '0')})? Essa ação não pode ser desfeita.
+          </Alert>
+        </Snackbar>
+      )}
     </>
   );
 }
 
-export function PurchaseHistoryTable({ purchases }: PurchaseHistoryTableProps) {
+export function PurchaseHistoryTable({
+  purchases,
+  onChangeItemQuantity,
+  onRemoveItem,
+  onCancelPurchase,
+  busy,
+}: PurchaseHistoryTableProps) {
+  const editable = Boolean(onChangeItemQuantity || onRemoveItem || onCancelPurchase);
+
   return (
     <TableContainer component={Paper} variant="outlined" sx={{ borderColor: '#E6E9EF' }}>
       <Table>
@@ -104,17 +232,25 @@ export function PurchaseHistoryTable({ purchases }: PurchaseHistoryTableProps) {
             <TableCell width={110}>Itens</TableCell>
             <TableCell width={170}>Data</TableCell>
             <TableCell width={140}>Total</TableCell>
+            {editable && <TableCell width={60} align="right" />}
           </TableRow>
         </TableHead>
 
         <TableBody>
           {purchases.map((purchase) => (
-            <PurchaseRow key={purchase.id} purchase={purchase} />
+            <PurchaseRow
+              key={purchase.id}
+              purchase={purchase}
+              onChangeItemQuantity={onChangeItemQuantity}
+              onRemoveItem={onRemoveItem}
+              onCancelPurchase={onCancelPurchase}
+              busy={busy}
+            />
           ))}
 
           {purchases.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6}>
+              <TableCell colSpan={editable ? 7 : 6}>
                 <Box sx={{ py: 6, textAlign: 'center' }}>
                   <Typography fontWeight={700}>Nenhuma compra registrada</Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
